@@ -1,0 +1,407 @@
+@page "/trainers"
+@using StudiBase.Shared.Clients
+@using StudiBase.Shared.Contracts.DTOs
+@using StudiBase.Shared.Contracts.Paging
+@using StudiBase.Shared.Services
+@using System.IO
+@inject TrainerApiClient Api
+@inject FileApiClient FileClient
+@inject ICameraService CameraService
+
+<h2 class="fw-bold mb-3 text-center">Trainers</h2>
+
+<div class="container-fluid px-0">
+    <div class="d-flex flex-wrap gap-2 justify-content-center mb-4">
+        <input class="form-control" style="max-width:280px" placeholder="Search trainers..." @bind="q" />
+        <button class="btn btn-primary" @onclick="Search"><i class="bi bi-search"></i> Search</button>
+        <button class="btn btn-outline-secondary" @onclick="Retry"><i class="bi bi-arrow-clockwise"></i> Reload</button>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-warning d-flex align-items-start gap-2">
+        <div class="flex-grow-1">@errorMessage</div>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="Retry">Retry</button>
+    </div>
+}
+
+@if (loading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+    </div>
+}
+else
+{
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            @if (!isEdit)
+            {
+                <h5 class="card-title mb-3">Create Trainer</h5>
+                <EditForm Model="newTrainer" OnValidSubmit="CreateAsync" class="row g-3">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+                    <div class="col-md-4"><InputText class="form-control" @bind-Value="newTrainer.Name" placeholder="Name" /></div>
+                    <div class="col-md-4"><InputText class="form-control" @bind-Value="newTrainer.Email" placeholder="Email" /></div>
+                    <div class="col-md-4"><InputText class="form-control" @bind-Value="newTrainer.Phone" placeholder="Phone" /></div>
+                    <div class="col-md-12"><InputText class="form-control" @bind-Value="newTrainer.Bio" placeholder="Bio" /></div>
+
+                    @* INPUT FOTO (CREATE) *@
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <InputText class="form-control" @bind-Value="newTrainer.PhotoUrl" placeholder="Photo URL or take photo" />
+                            <button type="button" class="btn btn-outline-secondary" @onclick="TakePhotoForCreate">
+                                ?? Camera
+                            </button>
+                        </div>
+                        @if (!string.IsNullOrEmpty(tempBase64Photo))
+                        {
+                            <div class="mt-2">
+                                <small class="text-muted">Preview (New Photo):</small><br />
+                                <img src="@tempBase64Photo" alt="Preview" class="img-thumbnail" style="max-height: 150px;" />
+                            </div>
+                        }
+                    </div>
+
+                    <div class="col-md-6"><InputText class="form-control" @bind-Value="newTrainer.LinkedInUrl" placeholder="LinkedIn Url" /></div>
+                    <div class="col-md-6"><InputText class="form-control" @bind-Value="newTrainer.Skills" placeholder="Skills (CSV)" /></div>
+                    <div class="col-md-3"><InputNumber class="form-control" @bind-Value="newTrainer.YearsOfExperience" placeholder="Years Exp" /></div>
+                    <div class="col-md-3"><InputNumber class="form-control" @bind-Value="newTrainer.RatingAverage" placeholder="Rating" /></div>
+                    <div class="col-md-4"><InputText class="form-control" @bind-Value="newTrainer.Country" placeholder="Country" /></div>
+                    <div class="col-12"><button class="btn btn-success" type="submit">Create</button></div>
+                </EditForm>
+            }
+            else
+            {
+                <h5 class="card-title mb-3">Edit Trainer (ID: @editId)</h5>
+                <EditForm Model="editTrainer" OnValidSubmit="SaveEditAsync" class="row g-3">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+                    <div class="col-md-4"><InputText class="form-control" @bind-Value="editTrainer.Name" /></div>
+                    <div class="col-md-4"><InputText class="form-control" @bind-Value="editTrainer.Email" /></div>
+                    <div class="col-md-4"><InputText class="form-control" @bind-Value="editTrainer.Phone" /></div>
+                    <div class="col-md-12"><InputText class="form-control" @bind-Value="editTrainer.Bio" /></div>
+
+                    @* INPUT FOTO (EDIT) *@
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            @* Menggunakan ProfilePicturePath jika ada, jika tidak PhotoUrl *@
+                            <InputText class="form-control" @bind-Value="editTrainer.PhotoUrl" placeholder="External URL" />
+                            <button type="button" class="btn btn-outline-secondary" @onclick="TakePhotoForEdit">
+                                ?? Camera
+                            </button>
+                        </div>
+                        <div class="mt-2">
+                            <img src="@GetImageSrc(editTrainer.ProfilePicturePath, editTrainer.PhotoUrl)"
+                                 alt="Current Photo"
+                                 class="img-thumbnail me-2"
+                                 style="max-height: 100px;" />
+                        </div>
+                    </div>
+
+                    <div class="col-md-6"><InputText class="form-control" @bind-Value="editTrainer.LinkedInUrl" /></div>
+                    <div class="col-md-6"><InputText class="form-control" @bind-Value="editTrainer.Skills" /></div>
+                    <div class="col-md-3"><InputNumber class="form-control" @bind-Value="editTrainer.YearsOfExperience" /></div>
+                    <div class="col-md-3"><InputNumber class="form-control" @bind-Value="editTrainer.RatingAverage" /></div>
+                    <div class="col-md-4"><InputText class="form-control" @bind-Value="editTrainer.Country" /></div>
+                    <div class="col-12 d-flex gap-2">
+                        <button class="btn btn-primary" type="submit">Save</button>
+                        <button class="btn btn-secondary" type="button" @onclick="CancelEdit">Cancel</button>
+                    </div>
+                </EditForm>
+            }
+        </div>
+    </div>
+
+    @if (data is null || data.Items.Count == 0)
+    {
+        <div class="text-center text-muted py-5">No trainers found.</div>
+    }
+    else
+    {
+        <div class="mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div><span class="badge bg-primary">Total: @data.Total</span></div>
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-outline-secondary btn-sm" disabled="@(pageNumber <= 1)" @onclick="Prev">Prev</button>
+                <span class="fw-semibold">Page @pageNumber / @totalPages</span>
+                <button class="btn btn-outline-secondary btn-sm" disabled="@(pageNumber >= totalPages)" @onclick="Next">Next</button>
+            </div>
+        </div>
+
+        @* --- TAMPILAN GRID KARTU (Sesuai Request) --- *@
+        <div class="row g-4 trainer-grid">
+            @foreach (var t in data.Items)
+            {
+                <div class="col-sm-6 col-md-4 col-xl-3">
+                    <div class="card h-100 border-0 shadow-sm text-center">
+                        <div class="position-relative pt-3">
+                            <img src="@GetImageSrc(t.ProfilePicturePath, t.PhotoUrl)"
+                                 class="rounded-circle trainer-thumb border"
+                                 alt="@t.Name" />
+                            @if (t.IsActive)
+                            {
+                                <span class="badge bg-success position-absolute top-0 end-0 m-2">Active</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary position-absolute top-0 end-0 m-2">Inactive</span>
+                            }
+                        </div>
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="fw-bold mb-1 text-truncate" title="@t.Name">@t.Name</h5>
+                            <p class="text-muted small mb-2 text-truncate">@t.Email</p>
+
+                            <div class="d-flex justify-content-center gap-2 mb-2">
+                                <span class="badge bg-light text-dark border">@t.Country</span>
+                                <span class="badge bg-light text-dark border">? @t.RatingAverage</span>
+                            </div>
+
+                            <p class="text-muted small mb-3 flex-grow-1" style="min-height:40px;">
+                                @(string.IsNullOrEmpty(t.Bio) ? "No bio available." : (t.Bio.Length > 60 ? t.Bio.Substring(0, 60) + "..." : t.Bio))
+                            </p>
+
+                            <div class="d-flex flex-wrap justify-content-center gap-1 mb-3">
+                                @if (!string.IsNullOrEmpty(t.Skills))
+                                {
+                                    @foreach (var skill in t.Skills.Split(',').Take(3))
+                                    {
+                                        <span class="badge rounded-pill text-bg-secondary" style="font-size:0.7rem;">@skill.Trim()</span>
+                                    }
+                                }
+                            </div>
+                        </div>
+                        <div class="card-footer bg-white border-top-0 pb-3">
+                            <div class="d-flex justify-content-center gap-2">
+                                <button class="btn btn-sm btn-outline-primary px-3" @onclick="() => BeginEdit(t)">Edit</button>
+                                <button class="btn btn-sm btn-outline-danger px-3" @onclick="() => DeleteAsync(t.Id)">Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="mt-4 d-flex justify-content-center gap-2">
+            <button class="btn btn-outline-secondary" disabled="@(pageNumber <= 1)" @onclick="Prev">Prev</button>
+            <span class="align-self-center fw-semibold">Page @pageNumber of @totalPages</span>
+            <button class="btn btn-outline-secondary" disabled="@(pageNumber >= totalPages)" @onclick="Next">Next</button>
+        </div>
+    }
+}
+
+<style>
+    .trainer-thumb {
+        width: 120px;
+        height: 120px;
+        object-fit: cover;
+        background: #f5f5f5;
+    }
+
+    .trainer-grid .card {
+        transition: transform .2s, box-shadow .2s;
+    }
+
+        .trainer-grid .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 .75rem 1.5rem rgba(0,0,0,.15);
+        }
+</style>
+
+@code {
+    string? q;
+    int pageNumber = 1;
+    int pageSize = 12;
+    int totalPages;
+    bool loading;
+    bool firstLoad = true;
+    string? errorMessage;
+    PagedResult<TrainerDto>? data;
+
+    bool isEdit;
+    int? editId;
+    TrainerCreateDto newTrainer = new();
+    TrainerUpdateDto editTrainer = new();
+
+    string? tempBase64Photo;
+
+    private const string BackendUrl = "https://localhost:7231";
+
+    private string GetImageSrc(string? profilePath, string? photoUrl)
+    {
+        if (!string.IsNullOrEmpty(profilePath))
+        {
+            return $"{BackendUrl}{profilePath}";
+        }
+        if (!string.IsNullOrEmpty(photoUrl)) return photoUrl;
+        return "https://placehold.co/150x150?text=No+Img";
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    async Task LoadAsync()
+    {
+        loading = true;
+        errorMessage = null;
+        StateHasChanged();
+
+        var attempts = firstLoad ? 5 : 1;
+        for (int i = 0; i < attempts; i++)
+        {
+            try
+            {
+                data = await Api.GetAsync(q, pageNumber, pageSize);
+                totalPages = data is null || data.PageSize == 0 ? 0 : (int)Math.Ceiling((double)data.Total / data.PageSize);
+                errorMessage = null;
+                break;
+            }
+            catch (HttpRequestException)
+            {
+                errorMessage = "Gagal terhubung ke API. Pastikan backend berjalan dan BaseAddress benar.";
+                if (i < attempts - 1)
+                {
+                    await Task.Delay(500 * (i + 1));
+                    continue;
+                }
+                data = null;
+                totalPages = 0;
+            }
+        }
+        firstLoad = false;
+        loading = false;
+        StateHasChanged();
+    }
+
+    async Task Retry() => await LoadAsync();
+    async Task Search() { pageNumber = 1; await LoadAsync(); }
+    async Task Prev() { if (pageNumber > 1) { pageNumber--; await LoadAsync(); } }
+    async Task Next() { if (pageNumber < totalPages) { pageNumber++; await LoadAsync(); } }
+
+    void BeginEdit(TrainerDto t)
+    {
+        isEdit = true;
+        editId = t.Id;
+        editTrainer = new TrainerUpdateDto
+        {
+            Name = t.Name,
+            Email = t.Email,
+            Bio = t.Bio,
+            Phone = t.Phone,
+            PhotoUrl = t.PhotoUrl,
+            LinkedInUrl = t.LinkedInUrl,
+            Skills = t.Skills,
+            YearsOfExperience = t.YearsOfExperience,
+            RatingAverage = t.RatingAverage,
+            IsActive = t.IsActive,
+            Country = t.Country,
+            ProfilePicturePath = t.ProfilePicturePath
+        };
+        tempBase64Photo = null;
+    }
+
+    void CancelEdit()
+    {
+        isEdit = false;
+        editId = null;
+        editTrainer = new();
+        tempBase64Photo = null;
+    }
+
+    private Stream GetStreamFromBase64(string base64Data)
+    {
+        var base64 = base64Data.Contains(",") ? base64Data.Split(',')[1] : base64Data;
+        var bytes = Convert.FromBase64String(base64);
+        return new MemoryStream(bytes);
+    }
+
+    async Task TakePhotoForCreate()
+    {
+        var base64Photo = await CameraService.TakePhotoAsync();
+        if (!string.IsNullOrEmpty(base64Photo))
+        {
+            tempBase64Photo = base64Photo;
+        }
+    }
+
+    // --- FIX UTAMA ADA DI SINI ---
+    async Task TakePhotoForEdit()
+    {
+        if (editId == null) return;
+
+        var base64Photo = await CameraService.TakePhotoAsync();
+        if (!string.IsNullOrEmpty(base64Photo))
+        {
+            try
+            {
+                using var stream = GetStreamFromBase64(base64Photo);
+                // Upload ke server
+                var newPath = await FileClient.UploadTrainerPhotoAsync(editId.Value, stream, "profile_cam.jpg");
+
+                // Refresh data list (biar kartu di belakang update)
+                await LoadAsync();
+
+                // PENTING: Update objek 'editTrainer' agar form tahu path baru
+                // Kalau tidak di-update, saat klik Save, dia akan kirim path lama (atau null) dan menimpa yang baru.
+                if (!string.IsNullOrEmpty(newPath))
+                {
+                    editTrainer.ProfilePicturePath = newPath;
+                }
+            }
+            catch (Exception ex)
+            {
+                errorMessage = "Gagal upload foto: " + ex.Message;
+            }
+        }
+    }
+
+    async Task CreateAsync()
+    {
+        try
+        {
+            var createdTrainer = await Api.CreateAsync(newTrainer);
+
+            if (createdTrainer != null && !string.IsNullOrEmpty(tempBase64Photo))
+            {
+                using var stream = GetStreamFromBase64(tempBase64Photo);
+                await FileClient.UploadTrainerPhotoAsync(createdTrainer.Id, stream, "profile_cam.jpg");
+            }
+
+            newTrainer = new();
+            tempBase64Photo = null;
+            pageNumber = 1;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Create failed: {ex.Message}";
+        }
+    }
+
+    async Task SaveEditAsync()
+    {
+        if (editId is null) return;
+        try
+        {
+            await Api.UpdateAsync(editId.Value, editTrainer);
+            CancelEdit();
+            await LoadAsync();
+        }
+        catch (HttpRequestException ex)
+        {
+            errorMessage = $"Update failed: {ex.Message}";
+        }
+    }
+
+    async Task DeleteAsync(int id)
+    {
+        try
+        {
+            await Api.DeleteAsync(id);
+            await LoadAsync();
+        }
+        catch (HttpRequestException ex)
+        {
+            errorMessage = $"Delete failed: {ex.Message}";
+        }
+    }
+}

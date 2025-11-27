@@ -1,0 +1,86 @@
+# Git ignore for Visual Studio / .NET / MAUI / Blazor
+
+###############
+# Visual Studio
+###############
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+###############
+# Build outputs
+############### 
+[Bb]in/
+[Oo]bj/
+[Bb]uild/
+[Dd]ebug*/
+[Rr]elease*/
+*.pdb
+*.dll
+*.exe
+*.appx
+*.msix
+*.msixbundle
+*.apk
+*.aab
+*.ipa
+*.pkg
+
+###############
+# Logs / temp
+###############
+*.log
+*.binlog
+*.tmp
+*.temp
+
+###############
+# NuGet
+###############
+packages/
+*.nupkg
+*.snupkg
+*.nuget.props
+*.nuget.targets
+
+###############
+# IDEs / tooling
+###############
+.vscode/
+.idea/
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+*.sln.iml
+
+###############
+# OS files
+###############
+.DS_Store
+Thumbs.db
+
+###############
+# Web tooling
+###############
+node_modules/
+wwwroot/dist/
+wwwroot/**/*.map
+
+###############
+# SQLite local DB (keep EF Core migrations tracked)
+###############
+*.db
+*.db-wal
+*.db-shm
+# Example explicit DB under web project (if present)
+#StudiBase.Web/**/*.db
+
+###############
+# Misc (avoid locked file issue you hit)
+###############
+FileContentIndex/
+*.vsidx
+
+# End of file

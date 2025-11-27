@@ -1,0 +1,33 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "StudiBase (Windows)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-maui-windows",
+            "program": "${workspaceFolder}/StudiBase/StudiBase/bin/Debug/net9.0-windows10.0.19041.0/win10-x64/StudiBase.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}/StudiBase/StudiBase",
+            "stopAtEntry": false,
+            "console": "internalConsole"
+        },
+        {
+            "name": "StudiBase.Web",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-web",
+            "program": "${workspaceFolder}/StudiBase/StudiBase.Web/bin/Debug/net9.0/StudiBase.Web.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/StudiBase/StudiBase.Web",
+            "stopAtEntry": false,
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "\\bNow listening on:\\s+(https?://\\S+)"
+            },
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            }
+        }
+    ]
+}

@@ -1,0 +1,39 @@
+@page "/camera"
+@using StudiBase.Shared.Services
+@inject ICameraService CameraService
+
+<h3>Kamera</h3>
+
+<div class="mb-3">
+    <button class="btn btn-primary" @onclick="TakePhoto">Ambil Foto</button>
+</div>
+
+<p>Status: @message</p>
+
+@if (!string.IsNullOrEmpty(imageDataUrl))
+{
+    <div class="card" style="width: 18rem;">
+        <img src="@imageDataUrl" class="card-img-top" alt="Hasil Foto" />
+    </div>
+}
+
+@code {
+    private string message = "Siap.";
+    private string imageDataUrl;
+
+    private async Task TakePhoto()
+    {
+        // Panggil fungsi lewat interface (tidak perlu tahu logic native-nya di sini)
+        var resultBase64 = await CameraService.TakePhotoAsync();
+
+        if (!string.IsNullOrEmpty(resultBase64))
+        {
+            imageDataUrl = resultBase64;
+            message = "Foto berhasil diambil!";
+        }
+        else
+        {
+            message = "Gagal mengambil foto / Dibatalkan.";
+        }
+    }
+}

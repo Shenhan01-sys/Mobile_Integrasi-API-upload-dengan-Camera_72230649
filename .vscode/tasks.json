@@ -1,0 +1,31 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build-maui-windows",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/StudiBase/StudiBase/StudiBase.csproj",
+                "/t:Build",
+                "/p:Configuration=Debug",
+                "/p:TargetFramework=net9.0-windows10.0.19041.0",
+                "-r",
+                "win10-x64"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "build-web",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/StudiBase/StudiBase.Web/StudiBase.Web.csproj",
+                "/p:Configuration=Debug"
+            ],
+            "problemMatcher": "$msCompile"
+        }
+    ]
+}

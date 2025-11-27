@@ -1,0 +1,7 @@
+.vs/
+bin/
+obj/
+*.user
+[Dd]ebug/
+[Rr]elease/
+appsettings.Development.json
