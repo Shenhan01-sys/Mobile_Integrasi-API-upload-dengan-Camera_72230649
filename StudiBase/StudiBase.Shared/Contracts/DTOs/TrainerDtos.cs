@@ -17,6 +17,8 @@ namespace StudiBase.Shared.Contracts.DTOs
         public bool IsActive { get; set; }
         public string? Country { get; set; }
         public string? ProfilePicturePath { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
     }
 
     public class TrainerCreateDto
@@ -44,6 +46,8 @@ namespace StudiBase.Shared.Contracts.DTOs
 
         // >>> TAMBAHAN BARU <<<
         public string? ProfilePicturePath { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
     }
 
     public class TrainerUpdateDto
@@ -71,5 +75,7 @@ namespace StudiBase.Shared.Contracts.DTOs
 
         // >>> TAMBAHAN BARU AGAR ERROR HILANG <<<
         public string? ProfilePicturePath { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
     }
 }

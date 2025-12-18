@@ -7,6 +7,7 @@
 @inject TrainerApiClient Api
 @inject FileApiClient FileClient
 @inject ICameraService CameraService
+@inject IGeolocationService GeoService
 
 <h2 class="fw-bold mb-3 text-center">Trainers</h2>
 
@@ -52,7 +53,7 @@ else
                         <div class="input-group">
                             <InputText class="form-control" @bind-Value="newTrainer.PhotoUrl" placeholder="Photo URL or take photo" />
                             <button type="button" class="btn btn-outline-secondary" @onclick="TakePhotoForCreate">
-                                ?? Camera
+                                Camera
                             </button>
                         </div>
                         @if (!string.IsNullOrEmpty(tempBase64Photo))
@@ -225,7 +226,7 @@ else
 
     string? tempBase64Photo;
 
-    private const string BackendUrl = "https://localhost:7231";
+    private const string BackendUrl = "https://loraine-seminiferous-snappily.ngrok-free.dev";
 
     private string GetImageSrc(string? profilePath, string? photoUrl)
     {

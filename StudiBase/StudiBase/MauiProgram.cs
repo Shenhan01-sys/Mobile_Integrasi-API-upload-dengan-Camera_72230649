@@ -26,6 +26,9 @@ namespace StudiBase
 
             builder.Services.AddMauiBlazorWebView();
 
+            // Daftarkan Service Geolocation Native
+            builder.Services.AddTransient<IGeolocationService, NativeGeolocationService>();
+
             // HttpClient + API clients
             builder.Services.AddSingleton(sp => new HttpClient { BaseAddress = ApiBaseAddressProvider.GetBaseAddress() });
 

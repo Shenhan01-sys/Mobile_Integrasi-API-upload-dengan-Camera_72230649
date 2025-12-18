@@ -35,5 +35,7 @@ namespace StudiBase.Shared.Domain.Entities
 
         [MaxLength(100)]
         public string? Country { get; set; }
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
     }
 }

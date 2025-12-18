@@ -28,6 +28,11 @@ builder.Services.AddCors(p => p.AddPolicy("Dev", b => b.AllowAnyOrigin().AllowAn
 // Tambahkan baris ini agar Project Web tidak error mencari CameraService
 builder.Services.AddScoped<ICameraService, BrowserCameraService>();
 
+// Daftarkan Service Geolocation Browser (Dummy)
+builder.Services.AddScoped<IGeolocationService, BrowserGeolocationService>();
+
+builder.Services.AddScoped<IGeolocationService, BrowserGeolocationService>();
+
 // HttpClient for Blazor Server with BaseAddress from current NavigationManager
 builder.Services.AddScoped(sp =>
 {
