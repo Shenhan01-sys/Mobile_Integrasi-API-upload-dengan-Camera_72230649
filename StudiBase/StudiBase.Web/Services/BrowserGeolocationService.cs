@@ -8,7 +8,7 @@ namespace StudiBase.Web.Services
     {
         private readonly IJSRuntime _js;
 
-        // Inject IJSRuntime untuk komunikasi dengan JavaScript
+        // Inject IJSRuntime agar bisa 'bicara' dengan JavaScript
         public BrowserGeolocationService(IJSRuntime js)
         {
             _js = js;
@@ -18,13 +18,12 @@ namespace StudiBase.Web.Services
         {
             try
             {
-                // Memanggil fungsi 'window.browserLocation.getCurrentPosition' dari file JS
+                // Panggil fungsi JS 'window.browserLocation.getCurrentPosition'
                 var result = await _js.InvokeAsync<GeoLocationModel>("browserLocation.getCurrentPosition");
                 return result;
             }
             catch (Exception ex)
             {
-                // Handle jika user menolak izin lokasi di browser (Block)
                 Console.WriteLine($"Error Browser Geo: {ex.Message}");
                 return null;
             }

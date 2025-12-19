@@ -13,37 +13,36 @@ namespace StudiBase.Services
     {
         public async Task<GeoLocationModel> GetCurrentLocationAsync()
         {
-            try
+            // REVISI: Bungkus dengan MainThread agar jalan di Windows
+            return await MainThread.InvokeOnMainThreadAsync(async () =>
             {
-                var status = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
-                if (status != PermissionStatus.Granted)
+                try
                 {
-                    status = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
+                    var status = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
                     if (status != PermissionStatus.Granted)
                     {
-                        throw new Exception("Location permission denied.");
+                        status = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
+                        if (status != PermissionStatus.Granted) return null;
+                    }
+
+                    var request = new GeolocationRequest(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(10));
+                    var location = await Geolocation.Default.GetLocationAsync(request);
+
+                    if (location != null)
+                    {
+                        return new GeoLocationModel
+                        {
+                            Latitude = location.Latitude,
+                            Longitude = location.Longitude
+                        };
                     }
                 }
-
-                var request = new GeolocationRequest(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(10));
-                var location = await Geolocation.Default.GetLocationAsync(request);
-
-                if (location != null)
+                catch (Exception ex)
                 {
-                    return new GeoLocationModel
-                    {
-                        Latitude = location.Latitude,
-                        Longitude = location.Longitude
-                    };
+                    System.Diagnostics.Debug.WriteLine($"Error GPS: {ex.Message}");
                 }
-            }
-            catch (Exception ex)
-            {
-                // Tangani pengecualian yang mungkin terjadi selama pengambilan lokasi
-                throw new Exception("Failed to get current location.", ex);
-            }
-
-            return null;
+                return null;
+            });
         }
     }
 }

@@ -31,14 +31,18 @@ builder.Services.AddScoped<ICameraService, BrowserCameraService>();
 // Daftarkan Service Geolocation Browser (Dummy)
 builder.Services.AddScoped<IGeolocationService, BrowserGeolocationService>();
 
-builder.Services.AddScoped<IGeolocationService, BrowserGeolocationService>();
-
 // HttpClient for Blazor Server with BaseAddress from current NavigationManager
 builder.Services.AddScoped(sp =>
 {
- var nav = sp.GetRequiredService<NavigationManager>();
- return new HttpClient { BaseAddress = new Uri(nav.BaseUri) };
+    var config = sp.GetRequiredService<IConfiguration>();
+    var apiBaseUrl = config["ApiBaseUrl"];
+
+    return new HttpClient
+    {
+        BaseAddress = new Uri(apiBaseUrl!)
+    };
 });
+
 // Typed API clients reuse the scoped HttpClient
 builder.Services.AddScoped<FileApiClient>();
 builder.Services.AddScoped<TrainerApiClient>();
@@ -67,7 +71,7 @@ if (!app.Environment.IsDevelopment())
  app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 
 app.UseStaticFiles();
 app.UseAntiforgery();

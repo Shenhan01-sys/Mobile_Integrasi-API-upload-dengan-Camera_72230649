@@ -70,6 +70,20 @@ else
                     <div class="col-md-3"><InputNumber class="form-control" @bind-Value="newTrainer.YearsOfExperience" placeholder="Years Exp" /></div>
                     <div class="col-md-3"><InputNumber class="form-control" @bind-Value="newTrainer.RatingAverage" placeholder="Rating" /></div>
                     <div class="col-md-4"><InputText class="form-control" @bind-Value="newTrainer.Country" placeholder="Country" /></div>
+                    <div class="col-md-12">
+                        <label class="form-label small text-muted">Location (GPS)</label>
+                        <div class="input-group">
+                            <span class="input-group-text">Lat</span>
+                            <InputNumber class="form-control" @bind-Value="newTrainer.Latitude" placeholder="Latitude" />
+
+                            <span class="input-group-text">Lng</span>
+                            <InputNumber class="form-control" @bind-Value="newTrainer.Longitude" placeholder="Longitude" />
+
+                            <button type="button" class="btn btn-info text-white" @onclick="GetLocationAsync">
+                                <i class="bi bi-geo-alt-fill"></i> Get GPS
+                            </button>
+                        </div>
+                    </div>
                     <div class="col-12"><button class="btn btn-success" type="submit">Create</button></div>
                 </EditForm>
             }
@@ -106,6 +120,20 @@ else
                     <div class="col-md-3"><InputNumber class="form-control" @bind-Value="editTrainer.YearsOfExperience" /></div>
                     <div class="col-md-3"><InputNumber class="form-control" @bind-Value="editTrainer.RatingAverage" /></div>
                     <div class="col-md-4"><InputText class="form-control" @bind-Value="editTrainer.Country" /></div>
+                    <div class="col-md-12">
+                        <label class="form-label small text-muted">Location (GPS)</label>
+                        <div class="input-group">
+                            <span class="input-group-text">Lat</span>
+                            <InputNumber class="form-control" @bind-Value="editTrainer.Latitude" placeholder="Latitude" />
+
+                            <span class="input-group-text">Lng</span>
+                            <InputNumber class="form-control" @bind-Value="editTrainer.Longitude" placeholder="Longitude" />
+
+                            <button type="button" class="btn btn-info text-white" @onclick="GetLocationAsync">
+                                <i class="bi bi-geo-alt-fill"></i> Get GPS
+                            </button>
+                        </div>
+                    </div>
                     <div class="col-12 d-flex gap-2">
                         <button class="btn btn-primary" type="submit">Save</button>
                         <button class="btn btn-secondary" type="button" @onclick="CancelEdit">Cancel</button>
@@ -157,6 +185,15 @@ else
                                 <span class="badge bg-light text-dark border">@t.Country</span>
                                 <span class="badge bg-light text-dark border">? @t.RatingAverage</span>
                             </div>
+
+                            @if (t.Latitude.HasValue && t.Longitude.HasValue)
+                            {
+                                <a href="@($"https://www.google.com/maps/search/?api=1&query={t.Latitude},{t.Longitude}")"
+                                   target="_blank"
+                                   class="small text-decoration-none mb-2 d-block">
+                                    <i class="bi bi-geo-alt"></i> View on Map
+                                </a>
+                            }
 
                             <p class="text-muted small mb-3 flex-grow-1" style="min-height:40px;">
                                 @(string.IsNullOrEmpty(t.Bio) ? "No bio available." : (t.Bio.Length > 60 ? t.Bio.Substring(0, 60) + "..." : t.Bio))
@@ -226,6 +263,7 @@ else
 
     string? tempBase64Photo;
 
+    // Pastikan URL ini sesuai dengan backend Anda saat running
     private const string BackendUrl = "https://loraine-seminiferous-snappily.ngrok-free.dev";
 
     private string GetImageSrc(string? profilePath, string? photoUrl)
@@ -240,6 +278,31 @@ else
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
+    // --- LOGIC GEOLOCATION ---
+    async Task GetLocationAsync()
+    {
+        var location = await GeoService.GetCurrentLocationAsync();
+
+        if (location != null)
+        {
+            if (isEdit)
+            {
+                editTrainer.Latitude = location.Latitude;
+                editTrainer.Longitude = location.Longitude;
+            }
+            else
+            {
+                newTrainer.Latitude = location.Latitude;
+                newTrainer.Longitude = location.Longitude;
+            }
+        }
+        else
+        {
+            errorMessage = "Gagal mengambil lokasi. Pastikan GPS aktif dan izin diberikan.";
+        }
+    }
+
+    // --- LOGIC LOAD DATA ---
     async Task LoadAsync()
     {
         loading = true;
@@ -278,6 +341,7 @@ else
     async Task Prev() { if (pageNumber > 1) { pageNumber--; await LoadAsync(); } }
     async Task Next() { if (pageNumber < totalPages) { pageNumber++; await LoadAsync(); } }
 
+    // --- PERBAIKAN BEGIN EDIT (DIGABUNG JADI SATU) ---
     void BeginEdit(TrainerDto t)
     {
         isEdit = true;
@@ -295,7 +359,11 @@ else
             RatingAverage = t.RatingAverage,
             IsActive = t.IsActive,
             Country = t.Country,
-            ProfilePicturePath = t.ProfilePicturePath
+            ProfilePicturePath = t.ProfilePicturePath,
+
+            // [TAMBAHAN PENTING] Copy data lokasi lama ke form edit
+            Latitude = t.Latitude,
+            Longitude = t.Longitude
         };
         tempBase64Photo = null;
     }
@@ -308,6 +376,7 @@ else
         tempBase64Photo = null;
     }
 
+    // --- LOGIC KAMERA & FILE ---
     private Stream GetStreamFromBase64(string base64Data)
     {
         var base64 = base64Data.Contains(",") ? base64Data.Split(',')[1] : base64Data;
@@ -324,7 +393,6 @@ else
         }
     }
 
-    // --- FIX UTAMA ADA DI SINI ---
     async Task TakePhotoForEdit()
     {
         if (editId == null) return;
@@ -335,14 +403,13 @@ else
             try
             {
                 using var stream = GetStreamFromBase64(base64Photo);
-                // Upload ke server
+                // Upload foto langsung saat mode edit
                 var newPath = await FileClient.UploadTrainerPhotoAsync(editId.Value, stream, "profile_cam.jpg");
 
-                // Refresh data list (biar kartu di belakang update)
+                // Refresh tampilan kartu
                 await LoadAsync();
 
-                // PENTING: Update objek 'editTrainer' agar form tahu path baru
-                // Kalau tidak di-update, saat klik Save, dia akan kirim path lama (atau null) dan menimpa yang baru.
+                // Update path di form edit agar tidak tertimpa nilai lama saat Save
                 if (!string.IsNullOrEmpty(newPath))
                 {
                     editTrainer.ProfilePicturePath = newPath;
@@ -355,12 +422,15 @@ else
         }
     }
 
+    // --- CREATE & UPDATE ---
     async Task CreateAsync()
     {
         try
         {
+            // Kirim data (termasuk Latitude/Longitude) ke API
             var createdTrainer = await Api.CreateAsync(newTrainer);
 
+            // Jika ada foto dari kamera, upload terpisah setelah trainer terbentuk
             if (createdTrainer != null && !string.IsNullOrEmpty(tempBase64Photo))
             {
                 using var stream = GetStreamFromBase64(tempBase64Photo);
@@ -383,6 +453,7 @@ else
         if (editId is null) return;
         try
         {
+            // Update data (termasuk Latitude/Longitude baru jika diubah)
             await Api.UpdateAsync(editId.Value, editTrainer);
             CancelEdit();
             await LoadAsync();
