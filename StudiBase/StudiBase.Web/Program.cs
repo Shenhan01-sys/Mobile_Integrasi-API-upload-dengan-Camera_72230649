@@ -15,6 +15,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
  .AddInteractiveServerComponents();
 
+builder.Services.AddSignalR(e => {
+    e.MaximumReceiveMessageSize = 10 * 1024 * 1024; // 10 MB
+});
+
 // Add device-specific services used by the StudiBase.Shared project
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
 builder.Services.AddScoped<IFileService, FileService>();
@@ -48,10 +52,21 @@ builder.Services.AddScoped<FileApiClient>();
 builder.Services.AddScoped<TrainerApiClient>();
 builder.Services.AddScoped<CourseApiClient>();
 
+builder.Services.AddScoped<INetworkService, BrowserNetworkService>();
+
+builder.Services.AddScoped<IGeocodingService, BrowserGeocodingService>();
+
 // AutoMapper
 builder.Services.AddAutoMapper(typeof(Program).Assembly);
 
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor |
+                               Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
+});
+
 var app = builder.Build();
+app.UseForwardedHeaders();
 app.UseCors("Dev");
 
 using (var scope = app.Services.CreateScope()) {

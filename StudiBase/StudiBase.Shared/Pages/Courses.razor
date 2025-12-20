@@ -2,289 +2,258 @@
 @using StudiBase.Shared.Clients
 @using StudiBase.Shared.Contracts.DTOs
 @using StudiBase.Shared.Contracts.Paging
+@using StudiBase.Shared.Services
+@implements IDisposable
 @inject CourseApiClient CoursesApi
 @inject TrainerApiClient TrainersApi
 @inject FileApiClient FilesApi
+@inject INetworkService Network
 
 <h2 class="fw-bold mb-3 text-center">Courses</h2>
 
-<div class="container-fluid px-0">
-    <div class="d-flex flex-wrap gap-2 justify-content-center mb-4">
+@* --- BANNER STATUS KONEKSI --- *@
+@if (!Network.IsOnline)
+{
+    <div class="alert alert-danger d-flex align-items-center mb-4 shadow-sm">
+        <i class="bi bi-wifi-off fs-4 me-3"></i>
+        <div>
+            <strong>Mode Offline!</strong> Fitur manajemen kursus dan upload dinonaktifkan sementara.
+        </div>
+    </div>
+}
+
+<div class="container-fluid px-0 mb-4">
+    <div class="d-flex flex-wrap gap-2 justify-content-center">
         <input class="form-control" style="max-width:280px" placeholder="Search courses..." @bind="q" />
-        <button class="btn btn-primary" @onclick="Search"><i class="bi bi-search"></i> Search</button>
-        <button class="btn btn-outline-secondary" @onclick="Retry"><i class="bi bi-arrow-clockwise"></i> Reload</button>
+        <button class="btn btn-primary" @onclick="Search">Search</button>
+        <button class="btn btn-outline-secondary" @onclick="Retry">Reload</button>
     </div>
 </div>
 
-@if (!string.IsNullOrWhiteSpace(errorMessage))
-{
-    <div class="alert alert-warning d-flex align-items-start gap-2">
-        <div class="flex-grow-1">@errorMessage</div>
-        <button class="btn btn-sm btn-outline-secondary" @onclick="Retry">Retry</button>
-    </div>
-}
-
 @if (loading)
 {
-    <div class="text-center py-5">
-        <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
-    </div>
+    <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
 }
 else
 {
-    <div class="card shadow-sm mb-4">
+    @* --- FORM CREATE / EDIT (FULL COLUMNS) --- *@
+    <div class="card shadow-sm mb-4 border-0">
         <div class="card-body">
             @if (!isEdit)
             {
-                <h5 class="card-title mb-3">Create Course</h5>
-                <EditForm Model="newCourse" OnValidSubmit="CreateAsync" class="row g-3">
+                <h5 class="card-title fw-bold text-success">Create Course</h5>
+                <EditForm Model="newCourse" OnValidSubmit="HandleSubmit" class="row g-3">
                     <DataAnnotationsValidator />
-                    <ValidationSummary />
-                    <div class="col-md-6"><InputText class="form-control" @bind-Value="newCourse.Title" placeholder="Title" /></div>
+                    <div class="col-md-6"><InputText class="form-control" @bind-Value="newCourse.Title" placeholder="Course Title" /></div>
                     <div class="col-md-6"><InputText class="form-control" @bind-Value="newCourse.Category" placeholder="Category" /></div>
-                    <div class="col-md-12"><InputText class="form-control" @bind-Value="newCourse.Description" placeholder="Description" /></div>
-                    <div class="col-md-4"><InputText class="form-control" @bind-Value="newCourse.Level" placeholder="Level" /></div>
+                    <div class="col-md-12"><InputTextArea class="form-control" @bind-Value="newCourse.Description" placeholder="Description" rows="2" /></div>
+                    <div class="col-md-4"><InputText class="form-control" @bind-Value="newCourse.Level" placeholder="Level (Beginner/..)" /></div>
                     <div class="col-md-4"><InputText class="form-control" @bind-Value="newCourse.Status" placeholder="Status" /></div>
                     <div class="col-md-4"><InputText class="form-control" @bind-Value="newCourse.Visibility" placeholder="Visibility" /></div>
                     <div class="col-md-3"><InputText class="form-control" @bind-Value="newCourse.Language" placeholder="Language" /></div>
                     <div class="col-md-3"><InputNumber class="form-control" @bind-Value="newCourse.Duration" placeholder="Duration (min)" /></div>
-                    <div class="col-md-3"><InputNumber class="form-control" @bind-Value="newCourse.TotalLessons" placeholder="Lessons" /></div>
-                    <div class="col-md-3 d-flex align-items-center">
-                        <InputCheckbox class="form-check-input me-2" @bind-Value="newCourse.IsFree" /> <label class="form-check-label">Free</label>
-                    </div>
-                    <div class="col-md-3"><InputNumber class="form-control" @bind-Value="newCourse.Price" placeholder="Price" /></div>
-                    <div class="col-md-6">
-                        <select class="form-select" @bind="newCourse.TrainerId">
+                    <div class="col-md-3"><InputNumber class="form-control" @bind-Value="newCourse.TotalLessons" placeholder="Total Lessons" /></div>
+                    <div class="col-md-3 d-flex align-items-center"><InputCheckbox @bind-Value="newCourse.IsFree" class="form-check-input me-2" /> Free Course</div>
+                    <div class="col-md-4"><InputNumber class="form-control" @bind-Value="newCourse.Price" placeholder="Price" /></div>
+                    <div class="col-md-8">
+                        <select class="form-select" @bind="SelectedTrainerId">
                             <option value="0">-- Select Trainer --</option>
-                            @foreach (var t in trainerOptions)
+                            @foreach (var t in allTrainers)
                             {
                                 <option value="@t.Id">@t.Name</option>
                             }
                         </select>
                     </div>
-                    <div class="col-12"><button class="btn btn-success" type="submit">Create</button></div>
+                    <div class="col-12"><button class="btn btn-success px-4" type="submit" disabled="@(!Network.IsOnline)">Create</button></div>
                 </EditForm>
             }
             else
             {
-                <h5 class="card-title mb-3">Edit Course (ID: @editId)</h5>
-                <EditForm Model="editCourse" OnValidSubmit="SaveEditAsync" class="row g-3">
+                <h5 class="card-title fw-bold text-primary">Edit Course (ID: @editId)</h5>
+                <EditForm Model="editCourse" OnValidSubmit="HandleSubmit" class="row g-3">
                     <DataAnnotationsValidator />
-                    <ValidationSummary />
                     <div class="col-md-6"><InputText class="form-control" @bind-Value="editCourse.Title" /></div>
                     <div class="col-md-6"><InputText class="form-control" @bind-Value="editCourse.Category" /></div>
-                    <div class="col-md-12"><InputText class="form-control" @bind-Value="editCourse.Description" /></div>
+                    <div class="col-md-12"><InputTextArea class="form-control" @bind-Value="editCourse.Description" rows="2" /></div>
                     <div class="col-md-4"><InputText class="form-control" @bind-Value="editCourse.Level" /></div>
                     <div class="col-md-4"><InputText class="form-control" @bind-Value="editCourse.Status" /></div>
                     <div class="col-md-4"><InputText class="form-control" @bind-Value="editCourse.Visibility" /></div>
                     <div class="col-md-3"><InputText class="form-control" @bind-Value="editCourse.Language" /></div>
                     <div class="col-md-3"><InputNumber class="form-control" @bind-Value="editCourse.Duration" /></div>
                     <div class="col-md-3"><InputNumber class="form-control" @bind-Value="editCourse.TotalLessons" /></div>
-                    <div class="col-md-3 d-flex align-items-center">
-                        <InputCheckbox class="form-check-input me-2" @bind-Value="editCourse.IsFree" /> <label class="form-check-label">Free</label>
-                    </div>
-                    <div class="col-md-3"><InputNumber class="form-control" @bind-Value="editCourse.Price" /></div>
-                    <div class="col-md-6">
-                        <select class="form-select" @bind="editCourse.TrainerId">
-                            <option value="0">-- Select Trainer --</option>
-                            @foreach (var t in trainerOptions)
+                    <div class="col-md-3 d-flex align-items-center"><InputCheckbox @bind-Value="editCourse.IsFree" class="form-check-input me-2" /> Free Course</div>
+                    <div class="col-md-4"><InputNumber class="form-control" @bind-Value="editCourse.Price" /></div>
+                    <div class="col-md-8">
+                        <select class="form-select" @bind="SelectedTrainerId">
+                            @foreach (var t in allTrainers)
                             {
                                 <option value="@t.Id">@t.Name</option>
                             }
                         </select>
                     </div>
                     <div class="col-12 d-flex gap-2">
-                        <button class="btn btn-primary" type="submit">Save</button>
-                        <button class="btn btn-secondary" type="button" @onclick="CancelEdit">Cancel</button>
+                        <button class="btn btn-primary px-4" type="submit" disabled="@(!Network.IsOnline)">Save</button>
+                        <button class="btn btn-secondary px-4" type="button" @onclick="CancelEdit">Cancel</button>
                     </div>
                 </EditForm>
             }
         </div>
     </div>
 
-    @if (data is null || data.Items.Count == 0)
-    {
-        <div class="text-center text-muted py-5">No courses found.</div>
-    }
-    else
-    {
-        <div class="mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <div><span class="badge bg-primary">Total: @data.Total</span></div>
-            <div class="d-flex align-items-center gap-2">
-                <button class="btn btn-outline-secondary btn-sm" disabled="@(pageNumber <= 1)" @onclick="Prev">Prev</button>
-                <span class="fw-semibold">Page @pageNumber / @totalPages</span>
-                <button class="btn btn-outline-secondary btn-sm" disabled="@(pageNumber >= totalPages)" @onclick="Next">Next</button>
-            </div>
-        </div>
-
-        <div class="row g-4 course-grid">
+    @* --- LIST COURSES (WITH THUMBNAIL) --- *@
+    <div class="row g-4">
+        @if (data?.Items != null)
+        {
             @foreach (var c in data.Items)
             {
-                var cardId = $"materials_{c.Id}";
-                <div class="col-sm-6 col-md-4 col-xl-3">
-                    <div class="card h-100 border-0 shadow-sm">
+                var cardId = $"mats_{c.Id}";
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 shadow-sm border-0 overflow-hidden">
+                        @* REVISI: Tampilkan Gambar Thumbnail *@
                         <div class="position-relative">
-                            <img class="card-img-top course-thumb" src="@GetThumb(c)" alt="thumb" />
-                            <span class="badge bg-light text-primary position-absolute top-0 start-0 m-2 shadow-sm">@DisplayCategory(c.Category)</span>
+                            <img class="card-img-top" src="@GetThumb(c)" alt="thumb" style="height:180px; object-fit:cover;" />
+                            <span class="badge bg-dark position-absolute top-0 start-0 m-2 opacity-75">@c.Category</span>
                             @if (c.IsFree)
                             {
                                 <span class="badge bg-success position-absolute top-0 end-0 m-2">FREE</span>
                             }
                         </div>
-                        <div class="card-body d-flex flex-column">
-                            <h6 class="fw-bold mb-2 text-truncate" title="@c.Title">@c.Title</h6>
-                            <p class="text-muted small mb-2" style="min-height:38px">@Truncate(c.Description,100)</p>
-                            <div class="d-flex flex-wrap gap-2 small mb-3">
-                                <span class="badge rounded-pill text-bg-secondary">Lessons @c.TotalLessons</span>
-                                <span class="badge rounded-pill text-bg-secondary">@c.Duration min</span>
-                                @if (!string.IsNullOrWhiteSpace(c.Level)) { <span class="badge rounded-pill text-bg-secondary">@c.Level</span>; }
+
+                        <div class="card-body">
+                            <h5 class="fw-bold text-truncate">@c.Title</h5>
+                            <p class="small text-muted mb-2"><i class="bi bi-person"></i> @c.TrainerName</p>
+                            <div class="d-flex gap-2 mb-3">
+                                <span class="badge bg-light text-dark border">@c.Level</span>
+                                <span class="badge bg-light text-dark border">@c.Duration min</span>
                             </div>
-                            <div class="mt-auto d-flex justify-content-between align-items-end">
-                                <div class="fw-semibold @((c.IsFree)?"text-success":"text-primary")">@FormatPrice(c.IsFree ?0 : c.Price)</div>
-                                <div class="text-end">
-                                    <InputFile OnChange="e => UploadThumbAsync(c.Id, e)" />
-                                </div>
-                            </div>
-                        </div>
-                        <div class="card-footer bg-white border-top-0 pt-0">
-                            <div class="d-flex flex-wrap gap-2">
-                                <button class="btn btn-sm btn-outline-primary" @onclick="() => BeginEdit(c)">Edit</button>
-                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAsync(c.Id)">Delete</button>
-                                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#@cardId" aria-expanded="false">Materials</button>
-                            </div>
-                            <div class="collapse mt-3" id="@cardId">
-                                <div class="mb-2">
-                                    <InputFile OnChange="e => UploadMaterialAsync(c.Id, e)" />
-                                    <button class="btn btn-sm btn-link" @onclick="() => LoadMaterialsAsync(c.Id)">Refresh</button>
-                                </div>
-                                @if (materials.TryGetValue(c.Id, out var mats) && mats?.Count > 0)
-                                {
-                                    <ul class="list-unstyled small mb-0">
-                                        @foreach (var m in mats!)
+
+                            <div class="mb-3">
+                                <label class="small fw-bold"><i class="bi bi-paperclip"></i> Materials:</label>
+                                <InputFile class="form-control form-control-sm my-2" OnChange="@(e => UploadMaterialAsync(e, c.Id))" disabled="@(!Network.IsOnline)" />
+                                <ul class="list-group list-group-flush border-top">
+                                    @if (materials.TryGetValue(c.Id, out var mList))
+                                    {
+                                        foreach (var m in mList)
                                         {
-                                            <li class="d-flex justify-content-between align-items-center mb-1">
-                                                <a class="text-decoration-none" href="@($"api/courses/{c.Id}/materials/{m.Id}/download")" target="_blank">@m.Title</a>
-                                                <span class="text-muted">@m.FileType • @FormatSize(m.FileSize)</span>
-                                                <button class="btn btn-sm btn-link text-danger" title="delete" @onclick="() => DeleteMaterialAsync(c.Id, m.Id)">?</button>
+                                            <li class="list-group-item d-flex justify-content-between align-items-center py-1 small px-0">
+                                                <span class="text-truncate" style="max-width: 80%;">@m.Title</span> @* Sesuai DTO: Title *@
+                                                <button class="btn btn-link text-danger btn-sm p-0" @onclick="() => DeleteMaterialAsync(c.Id, m.Id)" disabled="@(!Network.IsOnline)"><i class="bi bi-trash"></i></button>
                                             </li>
                                         }
-                                    </ul>
-                                }
-                                else
-                                {
-                                    <div class="text-muted small">No materials.</div>
-                                }
+                                    }
+                                </ul>
+                            </div>
+
+                            @* REVISI: Upload Thumbnail Baru *@
+                            <div class="mb-3">
+                                <label class="small fw-bold">Change Thumbnail:</label>
+                                <InputFile class="form-control form-control-sm" OnChange="@(e => UploadThumbAsync(c.Id, e))" disabled="@(!Network.IsOnline)" />
+                            </div>
+
+                            <div class="pt-3 border-top d-flex gap-2">
+                                <button class="btn btn-sm btn-outline-primary flex-fill" @onclick="() => BeginEdit(c)" disabled="@(!Network.IsOnline)">Edit</button>
+                                <button class="btn btn-sm btn-outline-danger flex-fill" @onclick="() => DeleteAsync(c.Id)" disabled="@(!Network.IsOnline)">Delete</button>
                             </div>
                         </div>
                     </div>
                 </div>
             }
-        </div>
-
-        <div class="mt-4 d-flex justify-content-center gap-2">
-            <button class="btn btn-outline-secondary" disabled="@(pageNumber <=1)" @onclick="Prev">Prev</button>
-            <span class="align-self-center fw-semibold">Page @pageNumber of @totalPages</span>
-            <button class="btn btn-outline-secondary" disabled="@(pageNumber >= totalPages)" @onclick="Next">Next</button>
-        </div>
-    }
+        }
+    </div>
 }
 
-<style>
-.course-thumb { height:160px; object-fit:cover; background:#f5f5f5; }
-.course-grid .card { transition:transform .2s, box-shadow .2s; }
-.course-grid .card:hover { transform:translateY(-4px); box-shadow:0 .75rem 1.5rem rgba(0,0,0,.15); }
-</style>
-
 @code {
-    string? q;
-    int pageNumber = 1;
-    int pageSize = 10;
-    int totalPages;
-    bool loading;
-    bool firstLoad = true;
-    string? errorMessage;
+    string? q; int pageNumber = 1, pageSize = 10;
+    bool loading, isEdit; int? editId; int SelectedTrainerId;
     PagedResult<CourseDto>? data;
-    bool isEdit;
-    int? editId;
+    List<TrainerDto> allTrainers = new();
     CourseCreateDto newCourse = new();
     CourseUpdateDto editCourse = new();
-    List<TrainerDto> trainerOptions = new();
-    Dictionary<int, List<CourseMaterialDto>?> materials = new();
+    Dictionary<int, List<CourseMaterialDto>> materials = new();
+
+    // --- LOGIC BACKEND URL (SAMA DENGAN TRAINERS) ---
+    private string BackendUrl =>
+#if WINDOWS
+        "https://localhost:7231";
+#else
+        "https://loraine-seminiferous-snappily.ngrok-free.dev";
+#endif
+
+    // Helper untuk menampilkan thumbnail
+    private string GetThumb(CourseDto c)
+    {
+        if (!string.IsNullOrEmpty(c.ThumbnailImagePath))
+        {
+            return $"{BackendUrl.TrimEnd('/')}/{c.ThumbnailImagePath.TrimStart('/')}";
+        }
+        return "https://via.placeholder.com/400x225?text=No+Image";
+    }
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadTrainerOptions();
+        Network.StatusChanged += OnStatusChanged;
         await LoadAsync();
+        var tData = await TrainersApi.GetAsync(null, 1, 100);
+        allTrainers = tData?.Items ?? new();
     }
-
-    string FormatSize(long bytes)
-    {
-        var kb = bytes / 1024.0;
-        return Math.Round(kb, 1).ToString("0.0") + " KB";
-    }
-    string FormatPrice(decimal price) => price <= 0 ? "FREE" : string.Format(new System.Globalization.CultureInfo("id-ID"), "Rp {0:N0}", price);
-    string GetThumb(CourseDto c) => !string.IsNullOrWhiteSpace(c.ThumbnailImagePath) ? c.ThumbnailImagePath : "https://via.placeholder.com/400x225?text=No+Image";
-    string Truncate(string? value, int max) => string.IsNullOrWhiteSpace(value) ? string.Empty : (value.Length <= max ? value : value[..max] + "…");
-    string DisplayCategory(string? cat) => string.IsNullOrWhiteSpace(cat) ? "Course" : cat!;
-
-    async Task LoadTrainerOptions()
-    {
-        try
-        {
-            var all = await TrainersApi.GetAllAsync();
-            trainerOptions = all ?? new();
-        }
-        catch { trainerOptions = new(); }
-    }
+    private void OnStatusChanged() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Network.StatusChanged -= OnStatusChanged;
 
     async Task LoadAsync()
     {
         loading = true;
-        errorMessage = null;
-        StateHasChanged();
-        var attempts = firstLoad ? 5 : 1;
-        for (int i = 0; i < attempts; i++)
+        try
         {
-            try
-            {
-                data = await CoursesApi.GetAsync(q, pageNumber, pageSize);
-                totalPages = data is null || data.PageSize == 0 ? 0 : (int)Math.Ceiling((double)data.Total / data.PageSize);
-                errorMessage = null;
-                if (data?.Items != null)
-                {
-                    foreach (var c in data.Items)
-                    {
-                        _ = LoadMaterialsAsync(c.Id);
-                    }
-                }
-                break;
-            }
-            catch (HttpRequestException)
-            {
-                errorMessage = "Gagal terhubung ke API. Pastikan backend berjalan dan BaseAddress benar.";
-                if (i < attempts - 1)
-                {
-                    await Task.Delay(500 * (i + 1));
-                    continue;
-                }
-                data = null;
-                totalPages = 0;
-            }
+            data = await CoursesApi.GetAsync(q, pageNumber, pageSize);
+            if (data?.Items != null) foreach (var c in data.Items) await LoadMaterialsAsync(c.Id);
         }
-        firstLoad = false;
-        loading = false;
-        StateHasChanged();
+        finally { loading = false; StateHasChanged(); }
     }
 
-    async Task Retry() { await LoadAsync(); }
-    async Task Search() { pageNumber = 1; await LoadAsync(); }
-    async Task Prev() { if (pageNumber > 1) { pageNumber--; await LoadAsync(); } }
-    async Task Next() { if (pageNumber < totalPages) { pageNumber++; await LoadAsync(); } }
+    async Task UploadThumbAsync(int courseId, InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            using var stream = file.OpenReadStream(10 * 1024 * 1024);
+            await FilesApi.UploadCourseThumbnailAsync(courseId, stream, file.Name);
+            await LoadAsync();
+        }
+        catch (Exception ex) { Console.WriteLine(ex.Message); }
+    }
+
+    async Task UploadMaterialAsync(InputFileChangeEventArgs e, int courseId)
+    {
+        var file = e.File;
+        using var stream = file.OpenReadStream(20 * 1024 * 1024);
+        var trainerId = data?.Items.FirstOrDefault(x => x.Id == courseId)?.TrainerId ?? 0;
+        await FilesApi.UploadCourseMaterialAsync(courseId, trainerId, stream, file.Name, file.Name, null, "pdf");
+        await LoadMaterialsAsync(courseId);
+    }
+
+    async Task LoadMaterialsAsync(int courseId)
+    {
+        materials[courseId] = await FilesApi.GetCourseMaterialsAsync(courseId) ?? new();
+    }
+
+    async Task HandleSubmit()
+    {
+        if (isEdit && editId != null)
+        {
+            editCourse.TrainerId = SelectedTrainerId;
+            await CoursesApi.UpdateAsync(editId.Value, editCourse);
+        }
+        else
+        {
+            newCourse.TrainerId = SelectedTrainerId;
+            await CoursesApi.CreateAsync(newCourse);
+        }
+        await LoadAsync(); CancelEdit();
+    }
 
     void BeginEdit(CourseDto c)
     {
-        isEdit = true;
-        editId = c.Id;
+        isEdit = true; editId = c.Id; SelectedTrainerId = c.TrainerId;
         editCourse = new CourseUpdateDto
         {
             Title = c.Title,
@@ -298,126 +267,12 @@ else
             TotalLessons = c.TotalLessons,
             IsFree = c.IsFree,
             Price = c.Price,
-            PublishedOn = c.PublishedOn,
             TrainerId = c.TrainerId
         };
     }
-
-    void CancelEdit()
-    {
-        isEdit = false;
-        editId = null;
-        editCourse = new();
-    }
-
-    async Task CreateAsync()
-    {
-        try
-        {
-            if (newCourse.TrainerId <= 0) { errorMessage = "Pilih trainer"; return; }
-            await CoursesApi.CreateAsync(newCourse);
-            newCourse = new();
-            pageNumber = 1;
-            await LoadAsync();
-        }
-        catch (HttpRequestException ex)
-        {
-            errorMessage = $"Create failed: {ex.Message}";
-        }
-    }
-
-    async Task SaveEditAsync()
-    {
-        if (editId is null) return;
-        try
-        {
-            if (editCourse.TrainerId <= 0) { errorMessage = "Pilih trainer"; return; }
-            await CoursesApi.UpdateAsync(editId.Value, editCourse);
-            CancelEdit();
-            await LoadAsync();
-        }
-        catch (HttpRequestException ex)
-        {
-            errorMessage = $"Update failed: {ex.Message}";
-        }
-    }
-
-    async Task DeleteAsync(int id)
-    {
-        try
-        {
-            await CoursesApi.DeleteAsync(id);
-            await LoadAsync();
-        }
-        catch (HttpRequestException ex)
-        {
-            errorMessage = $"Delete failed: {ex.Message}";
-        }
-    }
-
-    async Task UploadThumbAsync(int courseId, InputFileChangeEventArgs e)
-    {
-        try
-        {
-            var file = e.File;
-            await using var stream = file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
-            var path = await FilesApi.UploadCourseThumbnailAsync(courseId, stream, file.Name);
-            if (!string.IsNullOrWhiteSpace(path) && data?.Items != null)
-            {
-                var c = data.Items.FirstOrDefault(x => x.Id == courseId);
-                if (c != null) { c.ThumbnailImagePath = path; StateHasChanged(); }
-            }
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Upload thumbnail failed: {ex.Message}";
-        }
-    }
-
-    async Task UploadMaterialAsync(int courseId, InputFileChangeEventArgs e)
-    {
-        try
-        {
-            var file = e.File;
-            await using var stream = file.OpenReadStream(maxAllowedSize: 200 * 1024 * 1024);
-            var ext = System.IO.Path.GetExtension(file.Name).TrimStart('.').ToLowerInvariant();
-            var fileType = string.IsNullOrWhiteSpace(ext) ? "txt" : ext;
-            var dto = await FilesApi.UploadCourseMaterialAsync(courseId, SelectedTrainerForUpload(courseId), stream, file.Name, file.Name, null, fileType);
-            await LoadMaterialsAsync(courseId);
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Upload material failed: {ex.Message}";
-        }
-    }
-
-    int SelectedTrainerForUpload(int courseId)
-    {
-        var c = data?.Items?.FirstOrDefault(x => x.Id == courseId);
-        return c?.TrainerId ?? 0;
-    }
-
-    async Task LoadMaterialsAsync(int courseId)
-    {
-        try
-        {
-            var list = await FilesApi.GetCourseMaterialsAsync(courseId);
-            materials[courseId] = list ?? new();
-            StateHasChanged();
-        }
-        catch { }
-    }
-
-    async Task DeleteMaterialAsync(int courseId, int materialId)
-    {
-        try
-        {
-            await FilesApi.DeleteCourseMaterialAsync(courseId, materialId);
-            await LoadMaterialsAsync(courseId);
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Delete material failed: {ex.Message}";
-        }
-    }
+    void CancelEdit() { isEdit = false; editId = null; SelectedTrainerId = 0; }
+    async Task DeleteAsync(int id) { await CoursesApi.DeleteAsync(id); await LoadAsync(); }
+    async Task DeleteMaterialAsync(int cid, int mid) { await FilesApi.DeleteCourseMaterialAsync(cid, mid); await LoadMaterialsAsync(cid); }
+    async Task Retry() => await LoadAsync();
+    async Task Search() { pageNumber = 1; await LoadAsync(); }
 }

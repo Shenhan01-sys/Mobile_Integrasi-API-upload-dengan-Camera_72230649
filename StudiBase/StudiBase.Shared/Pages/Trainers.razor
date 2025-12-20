@@ -1,479 +1,298 @@
-@page "/trainers"
+﻿@page "/trainers"
 @using StudiBase.Shared.Clients
 @using StudiBase.Shared.Contracts.DTOs
 @using StudiBase.Shared.Contracts.Paging
 @using StudiBase.Shared.Services
 @using System.IO
+@implements IDisposable
 @inject TrainerApiClient Api
 @inject FileApiClient FileClient
 @inject ICameraService CameraService
 @inject IGeolocationService GeoService
+@inject INetworkService Network
+@inject IGeocodingService Geocoding
 
 <h2 class="fw-bold mb-3 text-center">Trainers</h2>
 
-<div class="container-fluid px-0">
-    <div class="d-flex flex-wrap gap-2 justify-content-center mb-4">
+@* --- BANNER STATUS KONEKSI --- *@
+@if (!Network.IsOnline)
+{
+    <div class="alert alert-danger d-flex align-items-center mb-4 shadow-sm">
+        <i class="bi bi-wifi-off fs-4 me-3"></i>
+        <div>
+            <strong>Mode Offline Aktif!</strong><br />
+            Fitur Create, Edit, dan Delete dinonaktifkan hingga koneksi tersedia kembali.
+        </div>
+    </div>
+}
+
+<div class="container-fluid px-0 mb-4">
+    <div class="d-flex flex-wrap gap-2 justify-content-center">
         <input class="form-control" style="max-width:280px" placeholder="Search trainers..." @bind="q" />
         <button class="btn btn-primary" @onclick="Search"><i class="bi bi-search"></i> Search</button>
         <button class="btn btn-outline-secondary" @onclick="Retry"><i class="bi bi-arrow-clockwise"></i> Reload</button>
     </div>
 </div>
 
-@if (!string.IsNullOrWhiteSpace(errorMessage))
-{
-    <div class="alert alert-warning d-flex align-items-start gap-2">
-        <div class="flex-grow-1">@errorMessage</div>
-        <button class="btn btn-sm btn-outline-secondary" @onclick="Retry">Retry</button>
-    </div>
-}
-
 @if (loading)
 {
-    <div class="text-center py-5">
-        <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
-    </div>
+    <div class="text-center py-5"><div class="spinner-border text-primary"></div></div>
 }
 else
 {
-    <div class="card shadow-sm mb-4">
+    @* --- FORM CREATE / EDIT (KOLOM LENGKAP) --- *@
+    <div class="card shadow-sm mb-4 border-0">
         <div class="card-body">
             @if (!isEdit)
             {
-                <h5 class="card-title mb-3">Create Trainer</h5>
+                <h5 class="card-title mb-3 fw-bold text-success"><i class="bi bi-plus-circle"></i> Create Trainer</h5>
                 <EditForm Model="newTrainer" OnValidSubmit="CreateAsync" class="row g-3">
                     <DataAnnotationsValidator />
-                    <ValidationSummary />
-                    <div class="col-md-4"><InputText class="form-control" @bind-Value="newTrainer.Name" placeholder="Name" /></div>
-                    <div class="col-md-4"><InputText class="form-control" @bind-Value="newTrainer.Email" placeholder="Email" /></div>
-                    <div class="col-md-4"><InputText class="form-control" @bind-Value="newTrainer.Phone" placeholder="Phone" /></div>
-                    <div class="col-md-12"><InputText class="form-control" @bind-Value="newTrainer.Bio" placeholder="Bio" /></div>
+                    <div class="col-md-4"><InputText class="form-control" @bind-Value="newTrainer.Name" placeholder="Full Name" disabled="@(!Network.IsOnline)" /></div>
+                    <div class="col-md-4"><InputText class="form-control" @bind-Value="newTrainer.Email" placeholder="Email" disabled="@(!Network.IsOnline)" /></div>
+                    <div class="col-md-4"><InputText class="form-control" @bind-Value="newTrainer.Phone" placeholder="Phone" disabled="@(!Network.IsOnline)" /></div>
+                    <div class="col-md-12"><InputTextArea class="form-control" @bind-Value="newTrainer.Bio" placeholder="Biography" disabled="@(!Network.IsOnline)" /></div>
+                    <div class="col-md-6"><InputText class="form-control" @bind-Value="newTrainer.Skills" placeholder="Skills (CSV)" disabled="@(!Network.IsOnline)" /></div>
+                    <div class="col-md-3"><InputNumber class="form-control" @bind-Value="newTrainer.YearsOfExperience" placeholder="Years Exp" disabled="@(!Network.IsOnline)" /></div>
+                    <div class="col-md-3"><InputNumber class="form-control" @bind-Value="newTrainer.RatingAverage" placeholder="Rating" disabled="@(!Network.IsOnline)" /></div>
+                    <div class="col-md-6"><InputText class="form-control" @bind-Value="newTrainer.LinkedInUrl" placeholder="LinkedIn URL" disabled="@(!Network.IsOnline)" /></div>
+                    <div class="col-md-6"><InputText class="form-control" @bind-Value="newTrainer.Country" placeholder="Country" disabled="@(!Network.IsOnline)" /></div>
 
-                    @* INPUT FOTO (CREATE) *@
                     <div class="col-md-6">
                         <div class="input-group">
-                            <InputText class="form-control" @bind-Value="newTrainer.PhotoUrl" placeholder="Photo URL or take photo" />
-                            <button type="button" class="btn btn-outline-secondary" @onclick="TakePhotoForCreate">
-                                Camera
-                            </button>
+                            <InputText class="form-control" @bind-Value="newTrainer.PhotoUrl" placeholder="External Photo URL" disabled="@(!Network.IsOnline)" />
+                            <button type="button" class="btn btn-outline-secondary" @onclick="TakePhotoForCreate" disabled="@(!Network.IsOnline)">📸 Camera</button>
                         </div>
                         @if (!string.IsNullOrEmpty(tempBase64Photo))
                         {
-                            <div class="mt-2">
-                                <small class="text-muted">Preview (New Photo):</small><br />
-                                <img src="@tempBase64Photo" alt="Preview" class="img-thumbnail" style="max-height: 150px;" />
-                            </div>
+                            <img src="@tempBase64Photo" class="img-thumbnail mt-2" style="max-height: 100px;" />
                         }
                     </div>
-
-                    <div class="col-md-6"><InputText class="form-control" @bind-Value="newTrainer.LinkedInUrl" placeholder="LinkedIn Url" /></div>
-                    <div class="col-md-6"><InputText class="form-control" @bind-Value="newTrainer.Skills" placeholder="Skills (CSV)" /></div>
-                    <div class="col-md-3"><InputNumber class="form-control" @bind-Value="newTrainer.YearsOfExperience" placeholder="Years Exp" /></div>
-                    <div class="col-md-3"><InputNumber class="form-control" @bind-Value="newTrainer.RatingAverage" placeholder="Rating" /></div>
-                    <div class="col-md-4"><InputText class="form-control" @bind-Value="newTrainer.Country" placeholder="Country" /></div>
-                    <div class="col-md-12">
-                        <label class="form-label small text-muted">Location (GPS)</label>
+                    <div class="col-md-6">
                         <div class="input-group">
                             <span class="input-group-text">Lat</span>
-                            <InputNumber class="form-control" @bind-Value="newTrainer.Latitude" placeholder="Latitude" />
-
+                            <InputNumber class="form-control" @bind-Value="newTrainer.Latitude" disabled="@(!Network.IsOnline)" />
                             <span class="input-group-text">Lng</span>
-                            <InputNumber class="form-control" @bind-Value="newTrainer.Longitude" placeholder="Longitude" />
-
-                            <button type="button" class="btn btn-info text-white" @onclick="GetLocationAsync">
-                                <i class="bi bi-geo-alt-fill"></i> Get GPS
-                            </button>
+                            <InputNumber class="form-control" @bind-Value="newTrainer.Longitude" disabled="@(!Network.IsOnline)" />
+                            <button type="button" class="btn btn-info text-white" @onclick="GetLocationAsync" disabled="@(!Network.IsOnline)">📍 GPS</button>
                         </div>
                     </div>
-                    <div class="col-12"><button class="btn btn-success" type="submit">Create</button></div>
+                    <div class="col-12"><button class="btn btn-success px-4" type="submit" disabled="@(!Network.IsOnline)">Create</button></div>
                 </EditForm>
             }
             else
             {
-                <h5 class="card-title mb-3">Edit Trainer (ID: @editId)</h5>
+                <h5 class="card-title mb-3 fw-bold text-primary"><i class="bi bi-pencil-square"></i> Edit Trainer (ID: @editId)</h5>
                 <EditForm Model="editTrainer" OnValidSubmit="SaveEditAsync" class="row g-3">
                     <DataAnnotationsValidator />
-                    <ValidationSummary />
-                    <div class="col-md-4"><InputText class="form-control" @bind-Value="editTrainer.Name" /></div>
-                    <div class="col-md-4"><InputText class="form-control" @bind-Value="editTrainer.Email" /></div>
-                    <div class="col-md-4"><InputText class="form-control" @bind-Value="editTrainer.Phone" /></div>
-                    <div class="col-md-12"><InputText class="form-control" @bind-Value="editTrainer.Bio" /></div>
+                    <div class="col-md-4"><InputText class="form-control" @bind-Value="editTrainer.Name" disabled="@(!Network.IsOnline)" /></div>
+                    <div class="col-md-4"><InputText class="form-control" @bind-Value="editTrainer.Email" disabled="@(!Network.IsOnline)" /></div>
+                    <div class="col-md-4"><InputText class="form-control" @bind-Value="editTrainer.Phone" disabled="@(!Network.IsOnline)" /></div>
+                    <div class="col-md-12"><InputTextArea class="form-control" @bind-Value="editTrainer.Bio" disabled="@(!Network.IsOnline)" /></div>
+                    <div class="col-md-6"><InputText class="form-control" @bind-Value="editTrainer.Skills" disabled="@(!Network.IsOnline)" /></div>
+                    <div class="col-md-3"><InputNumber class="form-control" @bind-Value="editTrainer.YearsOfExperience" disabled="@(!Network.IsOnline)" /></div>
+                    <div class="col-md-3"><InputNumber class="form-control" @bind-Value="editTrainer.RatingAverage" disabled="@(!Network.IsOnline)" /></div>
+                    <div class="col-md-6"><InputText class="form-control" @bind-Value="editTrainer.LinkedInUrl" disabled="@(!Network.IsOnline)" /></div>
+                    <div class="col-md-6"><InputText class="form-control" @bind-Value="editTrainer.Country" disabled="@(!Network.IsOnline)" /></div>
 
-                    @* INPUT FOTO (EDIT) *@
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-outline-secondary w-100 mb-2" @onclick="TakePhotoForEdit" disabled="@(!Network.IsOnline)">📸 New Photo</button>
+                        <img src="@GetImageSrc(editId ?? 0, editTrainer.ProfilePicturePath, editTrainer.PhotoUrl)" class="img-thumbnail d-block mx-auto" style="max-height: 120px;" />
+                    </div>
                     <div class="col-md-6">
                         <div class="input-group">
-                            @* Menggunakan ProfilePicturePath jika ada, jika tidak PhotoUrl *@
-                            <InputText class="form-control" @bind-Value="editTrainer.PhotoUrl" placeholder="External URL" />
-                            <button type="button" class="btn btn-outline-secondary" @onclick="TakePhotoForEdit">
-                                ?? Camera
-                            </button>
-                        </div>
-                        <div class="mt-2">
-                            <img src="@GetImageSrc(editTrainer.ProfilePicturePath, editTrainer.PhotoUrl)"
-                                 alt="Current Photo"
-                                 class="img-thumbnail me-2"
-                                 style="max-height: 100px;" />
-                        </div>
-                    </div>
-
-                    <div class="col-md-6"><InputText class="form-control" @bind-Value="editTrainer.LinkedInUrl" /></div>
-                    <div class="col-md-6"><InputText class="form-control" @bind-Value="editTrainer.Skills" /></div>
-                    <div class="col-md-3"><InputNumber class="form-control" @bind-Value="editTrainer.YearsOfExperience" /></div>
-                    <div class="col-md-3"><InputNumber class="form-control" @bind-Value="editTrainer.RatingAverage" /></div>
-                    <div class="col-md-4"><InputText class="form-control" @bind-Value="editTrainer.Country" /></div>
-                    <div class="col-md-12">
-                        <label class="form-label small text-muted">Location (GPS)</label>
-                        <div class="input-group">
                             <span class="input-group-text">Lat</span>
-                            <InputNumber class="form-control" @bind-Value="editTrainer.Latitude" placeholder="Latitude" />
-
+                            <InputNumber class="form-control" @bind-Value="editTrainer.Latitude" disabled="@(!Network.IsOnline)" />
                             <span class="input-group-text">Lng</span>
-                            <InputNumber class="form-control" @bind-Value="editTrainer.Longitude" placeholder="Longitude" />
-
-                            <button type="button" class="btn btn-info text-white" @onclick="GetLocationAsync">
-                                <i class="bi bi-geo-alt-fill"></i> Get GPS
-                            </button>
+                            <InputNumber class="form-control" @bind-Value="editTrainer.Longitude" disabled="@(!Network.IsOnline)" />
+                            <button type="button" class="btn btn-info text-white" @onclick="GetLocationAsync" disabled="@(!Network.IsOnline)">📍 GPS</button>
                         </div>
                     </div>
                     <div class="col-12 d-flex gap-2">
-                        <button class="btn btn-primary" type="submit">Save</button>
-                        <button class="btn btn-secondary" type="button" @onclick="CancelEdit">Cancel</button>
+                        <button class="btn btn-primary px-4" type="submit" disabled="@(!Network.IsOnline)">Save</button>
+                        <button class="btn btn-secondary px-4" type="button" @onclick="CancelEdit">Cancel</button>
                     </div>
                 </EditForm>
             }
         </div>
     </div>
 
-    @if (data is null || data.Items.Count == 0)
-    {
-        <div class="text-center text-muted py-5">No trainers found.</div>
-    }
-    else
-    {
-        <div class="mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <div><span class="badge bg-primary">Total: @data.Total</span></div>
-            <div class="d-flex align-items-center gap-2">
-                <button class="btn btn-outline-secondary btn-sm" disabled="@(pageNumber <= 1)" @onclick="Prev">Prev</button>
-                <span class="fw-semibold">Page @pageNumber / @totalPages</span>
-                <button class="btn btn-outline-secondary btn-sm" disabled="@(pageNumber >= totalPages)" @onclick="Next">Next</button>
-            </div>
-        </div>
-
-        @* --- TAMPILAN GRID KARTU (Sesuai Request) --- *@
-        <div class="row g-4 trainer-grid">
+    @* --- GRID TRAINER CARDS --- *@
+    <div class="row g-4">
+        @if (data?.Items != null)
+        {
             @foreach (var t in data.Items)
             {
                 <div class="col-sm-6 col-md-4 col-xl-3">
                     <div class="card h-100 border-0 shadow-sm text-center">
-                        <div class="position-relative pt-3">
-                            <img src="@GetImageSrc(t.ProfilePicturePath, t.PhotoUrl)"
-                                 class="rounded-circle trainer-thumb border"
-                                 alt="@t.Name" />
-                            @if (t.IsActive)
-                            {
-                                <span class="badge bg-success position-absolute top-0 end-0 m-2">Active</span>
-                            }
-                            else
-                            {
-                                <span class="badge bg-secondary position-absolute top-0 end-0 m-2">Inactive</span>
-                            }
+                        <div class="pt-4 text-center">
+                            <img src="@GetImageSrc(t.Id, t.ProfilePicturePath, t.PhotoUrl)"
+                                 class="rounded-circle border trainer-thumb" alt="@t.Name" />
                         </div>
                         <div class="card-body d-flex flex-column">
-                            <h5 class="fw-bold mb-1 text-truncate" title="@t.Name">@t.Name</h5>
-                            <p class="text-muted small mb-2 text-truncate">@t.Email</p>
+                            <h5 class="fw-bold mb-1">@t.Name</h5>
+                            <p class="text-muted small mb-1">@t.Email</p>
 
-                            <div class="d-flex justify-content-center gap-2 mb-2">
-                                <span class="badge bg-light text-dark border">@t.Country</span>
-                                <span class="badge bg-light text-dark border">? @t.RatingAverage</span>
-                            </div>
-
+                            @* TAMPILAN ALAMAT (GEOCODING) *@
                             @if (t.Latitude.HasValue && t.Longitude.HasValue)
                             {
-                                <a href="@($"https://www.google.com/maps/search/?api=1&query={t.Latitude},{t.Longitude}")"
-                                   target="_blank"
-                                   class="small text-decoration-none mb-2 d-block">
-                                    <i class="bi bi-geo-alt"></i> View on Map
+                                <div class="alert alert-light border-0 py-1 px-2 mb-2" style="font-size: 0.75rem; background: #f8f9fa;">
+                                    <i class="bi bi-geo-alt-fill text-danger"></i>
+                                    @(trainerAddresses.TryGetValue(t.Id, out var addr) ? addr : "Mencari alamat...")
+                                </div>
+                                <a href="@($"https://www.google.com/maps?q={t.Latitude},{t.Longitude}")"
+                                   target="_blank" class="small text-decoration-none mb-3 d-block">
+                                    <i class="bi bi-map"></i> View on Map
                                 </a>
                             }
 
-                            <p class="text-muted small mb-3 flex-grow-1" style="min-height:40px;">
-                                @(string.IsNullOrEmpty(t.Bio) ? "No bio available." : (t.Bio.Length > 60 ? t.Bio.Substring(0, 60) + "..." : t.Bio))
+                            <p class="small text-muted mb-3 flex-grow-1">
+                                @(t.Bio?.Length > 60 ? t.Bio.Substring(0, 60) + "..." : t.Bio)
                             </p>
 
-                            <div class="d-flex flex-wrap justify-content-center gap-1 mb-3">
-                                @if (!string.IsNullOrEmpty(t.Skills))
-                                {
-                                    @foreach (var skill in t.Skills.Split(',').Take(3))
-                                    {
-                                        <span class="badge rounded-pill text-bg-secondary" style="font-size:0.7rem;">@skill.Trim()</span>
-                                    }
-                                }
-                            </div>
-                        </div>
-                        <div class="card-footer bg-white border-top-0 pb-3">
-                            <div class="d-flex justify-content-center gap-2">
-                                <button class="btn btn-sm btn-outline-primary px-3" @onclick="() => BeginEdit(t)">Edit</button>
-                                <button class="btn btn-sm btn-outline-danger px-3" @onclick="() => DeleteAsync(t.Id)">Delete</button>
+                            <div class="mt-auto d-flex gap-2">
+                                <button class="btn btn-sm btn-outline-primary flex-fill" @onclick="() => BeginEdit(t)" disabled="@(!Network.IsOnline)">Edit</button>
+                                <button class="btn btn-sm btn-outline-danger flex-fill" @onclick="() => DeleteAsync(t.Id)" disabled="@(!Network.IsOnline)">Delete</button>
                             </div>
                         </div>
                     </div>
                 </div>
             }
-        </div>
-
-        <div class="mt-4 d-flex justify-content-center gap-2">
-            <button class="btn btn-outline-secondary" disabled="@(pageNumber <= 1)" @onclick="Prev">Prev</button>
-            <span class="align-self-center fw-semibold">Page @pageNumber of @totalPages</span>
-            <button class="btn btn-outline-secondary" disabled="@(pageNumber >= totalPages)" @onclick="Next">Next</button>
-        </div>
-    }
+        }
+    </div>
 }
 
-<style>
-    .trainer-thumb {
-        width: 120px;
-        height: 120px;
-        object-fit: cover;
-        background: #f5f5f5;
-    }
-
-    .trainer-grid .card {
-        transition: transform .2s, box-shadow .2s;
-    }
-
-        .trainer-grid .card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 .75rem 1.5rem rgba(0,0,0,.15);
-        }
-</style>
-
 @code {
-    string? q;
-    int pageNumber = 1;
-    int pageSize = 12;
-    int totalPages;
-    bool loading;
-    bool firstLoad = true;
-    string? errorMessage;
+    string? q; int pageNumber = 1, pageSize = 12, totalPages;
+    bool loading, isEdit; int? editId; string? tempBase64Photo;
     PagedResult<TrainerDto>? data;
-
-    bool isEdit;
-    int? editId;
     TrainerCreateDto newTrainer = new();
     TrainerUpdateDto editTrainer = new();
+    private Dictionary<int, string> trainerAddresses = new();
 
-    string? tempBase64Photo;
+    private string BackendUrl =>
+#if WINDOWS
+        "https://localhost:7231";
+#else
+        "https://loraine-seminiferous-snappily.ngrok-free.dev";
+#endif
 
-    // Pastikan URL ini sesuai dengan backend Anda saat running
-    private const string BackendUrl = "https://loraine-seminiferous-snappily.ngrok-free.dev";
-
-    private string GetImageSrc(string? profilePath, string? photoUrl)
+    protected override async Task OnInitializedAsync()
     {
-        if (!string.IsNullOrEmpty(profilePath))
-        {
-            return $"{BackendUrl}{profilePath}";
-        }
-        if (!string.IsNullOrEmpty(photoUrl)) return photoUrl;
-        return "https://placehold.co/150x150?text=No+Img";
+        Network.StatusChanged += OnStatusChanged;
+        await LoadAsync();
+    }
+    private void OnStatusChanged() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Network.StatusChanged -= OnStatusChanged;
+
+    private string GetImageSrc(int id, string? profilePath, string? photoUrl)
+    {
+        if (editId == id && !string.IsNullOrEmpty(tempBase64Photo)) return tempBase64Photo;
+        if (!string.IsNullOrEmpty(profilePath)) return $"{BackendUrl.TrimEnd('/')}/{profilePath.TrimStart('/')}";
+        return photoUrl ?? "https://placehold.co/150x150?text=No+Img";
     }
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
-
-    // --- LOGIC GEOLOCATION ---
-    async Task GetLocationAsync()
-    {
-        var location = await GeoService.GetCurrentLocationAsync();
-
-        if (location != null)
-        {
-            if (isEdit)
-            {
-                editTrainer.Latitude = location.Latitude;
-                editTrainer.Longitude = location.Longitude;
-            }
-            else
-            {
-                newTrainer.Latitude = location.Latitude;
-                newTrainer.Longitude = location.Longitude;
-            }
-        }
-        else
-        {
-            errorMessage = "Gagal mengambil lokasi. Pastikan GPS aktif dan izin diberikan.";
-        }
-    }
-
-    // --- LOGIC LOAD DATA ---
     async Task LoadAsync()
     {
         loading = true;
-        errorMessage = null;
-        StateHasChanged();
-
-        var attempts = firstLoad ? 5 : 1;
-        for (int i = 0; i < attempts; i++)
+        try
         {
-            try
+            data = await Api.GetAsync(q, pageNumber, pageSize);
+            totalPages = data is null || data.PageSize == 0 ? 0 : (int)Math.Ceiling((double)data.Total / data.PageSize);
+
+            if (data?.Items != null)
             {
-                data = await Api.GetAsync(q, pageNumber, pageSize);
-                totalPages = data is null || data.PageSize == 0 ? 0 : (int)Math.Ceiling((double)data.Total / data.PageSize);
-                errorMessage = null;
-                break;
-            }
-            catch (HttpRequestException)
-            {
-                errorMessage = "Gagal terhubung ke API. Pastikan backend berjalan dan BaseAddress benar.";
-                if (i < attempts - 1)
+                foreach (var t in data.Items)
                 {
-                    await Task.Delay(500 * (i + 1));
-                    continue;
+                    if (t.Latitude.HasValue && t.Longitude.HasValue)
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            var addr = await Geocoding.GetAddressAsync(t.Latitude.Value, t.Longitude.Value);
+                            trainerAddresses[t.Id] = addr ?? "Alamat tidak ditemukan";
+                            await InvokeAsync(StateHasChanged);
+                        });
+                    }
                 }
-                data = null;
-                totalPages = 0;
             }
         }
-        firstLoad = false;
-        loading = false;
-        StateHasChanged();
+        finally { loading = false; StateHasChanged(); }
     }
 
-    async Task Retry() => await LoadAsync();
-    async Task Search() { pageNumber = 1; await LoadAsync(); }
-    async Task Prev() { if (pageNumber > 1) { pageNumber--; await LoadAsync(); } }
-    async Task Next() { if (pageNumber < totalPages) { pageNumber++; await LoadAsync(); } }
+    async Task GetLocationAsync()
+    {
+        var loc = await GeoService.GetCurrentLocationAsync();
+        if (loc != null)
+        {
+            if (isEdit) { editTrainer.Latitude = loc.Latitude; editTrainer.Longitude = loc.Longitude; }
+            else { newTrainer.Latitude = loc.Latitude; newTrainer.Longitude = loc.Longitude; }
+        }
+    }
 
-    // --- PERBAIKAN BEGIN EDIT (DIGABUNG JADI SATU) ---
+    async Task TakePhotoForCreate()
+    {
+        var res = await CameraService.TakePhotoAsync();
+        if (!string.IsNullOrEmpty(res)) { tempBase64Photo = res; StateHasChanged(); }
+    }
+
+    async Task TakePhotoForEdit()
+    {
+        if (editId == null) return;
+        var res = await CameraService.TakePhotoAsync();
+        if (!string.IsNullOrEmpty(res))
+        {
+            tempBase64Photo = res; StateHasChanged();
+            using var s = GetStreamFromBase64(res);
+            var path = await FileClient.UploadTrainerPhotoAsync(editId.Value, s, "profile_cam.jpg");
+            if (path != null) editTrainer.ProfilePicturePath = path;
+            await LoadAsync();
+        }
+    }
+
+    private Stream GetStreamFromBase64(string d) => new MemoryStream(Convert.FromBase64String(d.Contains(",") ? d.Split(',')[1] : d));
+    async Task CreateAsync()
+    {
+        var res = await Api.CreateAsync(newTrainer);
+        if (res != null && tempBase64Photo != null)
+        {
+            using var s = GetStreamFromBase64(tempBase64Photo);
+            await FileClient.UploadTrainerPhotoAsync(res.Id, s, "profile_cam.jpg");
+        }
+        newTrainer = new(); tempBase64Photo = null; await LoadAsync();
+    }
+    async Task SaveEditAsync()
+    {
+        if (editId != null) { await Api.UpdateAsync(editId.Value, editTrainer); tempBase64Photo = null; CancelEdit(); await LoadAsync(); }
+    }
     void BeginEdit(TrainerDto t)
     {
-        isEdit = true;
-        editId = t.Id;
+        isEdit = true; editId = t.Id; tempBase64Photo = null;
         editTrainer = new TrainerUpdateDto
         {
             Name = t.Name,
             Email = t.Email,
             Bio = t.Bio,
             Phone = t.Phone,
+            ProfilePicturePath = t.ProfilePicturePath,
             PhotoUrl = t.PhotoUrl,
-            LinkedInUrl = t.LinkedInUrl,
+            Latitude = t.Latitude,
+            Longitude = t.Longitude,
             Skills = t.Skills,
             YearsOfExperience = t.YearsOfExperience,
             RatingAverage = t.RatingAverage,
-            IsActive = t.IsActive,
-            Country = t.Country,
-            ProfilePicturePath = t.ProfilePicturePath,
-
-            // [TAMBAHAN PENTING] Copy data lokasi lama ke form edit
-            Latitude = t.Latitude,
-            Longitude = t.Longitude
+            Country = t.Country
         };
-        tempBase64Photo = null;
     }
-
-    void CancelEdit()
-    {
-        isEdit = false;
-        editId = null;
-        editTrainer = new();
-        tempBase64Photo = null;
-    }
-
-    // --- LOGIC KAMERA & FILE ---
-    private Stream GetStreamFromBase64(string base64Data)
-    {
-        var base64 = base64Data.Contains(",") ? base64Data.Split(',')[1] : base64Data;
-        var bytes = Convert.FromBase64String(base64);
-        return new MemoryStream(bytes);
-    }
-
-    async Task TakePhotoForCreate()
-    {
-        var base64Photo = await CameraService.TakePhotoAsync();
-        if (!string.IsNullOrEmpty(base64Photo))
-        {
-            tempBase64Photo = base64Photo;
-        }
-    }
-
-    async Task TakePhotoForEdit()
-    {
-        if (editId == null) return;
-
-        var base64Photo = await CameraService.TakePhotoAsync();
-        if (!string.IsNullOrEmpty(base64Photo))
-        {
-            try
-            {
-                using var stream = GetStreamFromBase64(base64Photo);
-                // Upload foto langsung saat mode edit
-                var newPath = await FileClient.UploadTrainerPhotoAsync(editId.Value, stream, "profile_cam.jpg");
-
-                // Refresh tampilan kartu
-                await LoadAsync();
-
-                // Update path di form edit agar tidak tertimpa nilai lama saat Save
-                if (!string.IsNullOrEmpty(newPath))
-                {
-                    editTrainer.ProfilePicturePath = newPath;
-                }
-            }
-            catch (Exception ex)
-            {
-                errorMessage = "Gagal upload foto: " + ex.Message;
-            }
-        }
-    }
-
-    // --- CREATE & UPDATE ---
-    async Task CreateAsync()
-    {
-        try
-        {
-            // Kirim data (termasuk Latitude/Longitude) ke API
-            var createdTrainer = await Api.CreateAsync(newTrainer);
-
-            // Jika ada foto dari kamera, upload terpisah setelah trainer terbentuk
-            if (createdTrainer != null && !string.IsNullOrEmpty(tempBase64Photo))
-            {
-                using var stream = GetStreamFromBase64(tempBase64Photo);
-                await FileClient.UploadTrainerPhotoAsync(createdTrainer.Id, stream, "profile_cam.jpg");
-            }
-
-            newTrainer = new();
-            tempBase64Photo = null;
-            pageNumber = 1;
-            await LoadAsync();
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Create failed: {ex.Message}";
-        }
-    }
-
-    async Task SaveEditAsync()
-    {
-        if (editId is null) return;
-        try
-        {
-            // Update data (termasuk Latitude/Longitude baru jika diubah)
-            await Api.UpdateAsync(editId.Value, editTrainer);
-            CancelEdit();
-            await LoadAsync();
-        }
-        catch (HttpRequestException ex)
-        {
-            errorMessage = $"Update failed: {ex.Message}";
-        }
-    }
-
-    async Task DeleteAsync(int id)
-    {
-        try
-        {
-            await Api.DeleteAsync(id);
-            await LoadAsync();
-        }
-        catch (HttpRequestException ex)
-        {
-            errorMessage = $"Delete failed: {ex.Message}";
-        }
-    }
+    void CancelEdit() { isEdit = false; editId = null; tempBase64Photo = null; }
+    async Task DeleteAsync(int id) { await Api.DeleteAsync(id); await LoadAsync(); }
+    async Task Search() { pageNumber = 1; await LoadAsync(); }
+    async Task Retry() => await LoadAsync();
 }
+
+<style>
+    .trainer-thumb {
+        width: 100px;
+        height: 100px;
+        object-fit: cover;
+    }
+</style>

@@ -23,8 +23,13 @@ namespace StudiBase
 
             // Service Kamera Native
             builder.Services.AddTransient<ICameraService, NativeCameraService>();
+            builder.Services.AddScoped<ICameraService, NativeCameraService>();
 
             builder.Services.AddMauiBlazorWebView();
+
+            builder.Services.AddSingleton<INetworkService, NativeNetworkService>();
+
+            builder.Services.AddTransient<IGeocodingService, NativeGeocodingService>();
 
             // Daftarkan Service Geolocation Native
             builder.Services.AddTransient<IGeolocationService, NativeGeolocationService>();
